@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdio.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,7 +31,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define ADC_SAMPLES_COUNT 60
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -43,10 +43,7 @@
 ADC_HandleTypeDef hadc1;
 
 /* USER CODE BEGIN PV */
-uint32_t adcValues[ADC_SAMPLES_COUNT];  // Array to store ADC readings
-uint32_t adcSum = 0;                    // Sum of all ADC readings
-float adcAverage = 0.0;                 // Average ADC value
-float voltage = 0.0;                    // Calculated voltage
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -54,52 +51,17 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
-float ReadVoltage(void);  // Function to read and calculate voltage
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-/**
-  * @brief  Function to read multiple ADC samples and calculate voltage
-  * @retval float: Voltage value in volts
-  */
-float ReadVoltage(void)
-{
-  adcSum = 0;
-
-  // Take multiple ADC readings
-  for (int i = 0; i < ADC_SAMPLES_COUNT; i++)
-  {
-    // Start ADC conversion
-    HAL_ADC_Start(&hadc1);
-
-    // Wait for conversion to complete
-    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-
-    // Read the ADC value
-    adcValues[i] = HAL_ADC_GetValue(&hadc1);
-
-    // Add to sum
-    adcSum += adcValues[i];
-
-    // Stop ADC conversion
-    HAL_ADC_Stop(&hadc1);
-
-    // Small delay between readings
-    HAL_Delay(1);
-  }
-
-  // Calculate average
-  adcAverage = (float)adcSum / ADC_SAMPLES_COUNT;
-
-  // Convert to voltage (assuming 3.3V reference)
-  // 12-bit ADC gives values from 0 to 4095
-  float calculatedVoltage = (adcAverage * 3.3f) / 4095.0f;
-
-  return calculatedVoltage;
-}
-
+#define SAMPLES 60
+#define VREF 3.3f
+#define ADC_RES 4095.0f
+  uint32_t adcAmount = 0;
+  uint32_t adcNum = 0;
+  float voltage = 0;
 /* USER CODE END 0 */
 
 /**
@@ -134,46 +96,40 @@ int main(void)
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
-	  HAL_Delay(1000);
-	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_RESET);
-    /* USER CODE END WHILE */
+      adcAmount = 0;
 
-    /* USER CODE BEGIN 3 */
+      for (int i = 0; i < SAMPLES; i++)
+      {
+          HAL_ADC_Start(&hadc1);
+          if (HAL_ADC_PollForConversion(&hadc1, 20) == HAL_OK)
+          {
+              adcNum = HAL_ADC_GetValue(&hadc1);
+              if (adcNum < 2048)
+                      {
+                          HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
+                          HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);
+                      }
+                      else
+                      {
+                          HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
+                          HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_RESET);
+                      }
+              adcAmount += adcNum;
+          }
+          HAL_ADC_Stop(&hadc1);
+      }
 
-    // Read voltage from potentiometer
-    voltage = ReadVoltage();
+      uint32_t average = adcAmount / NUM_SAMPLES;
+      voltage = (average / ADC_RES) * VREF;
 
-    // Visual indication of voltage level using green LED (PD12)
-    // Turn on LED if voltage is above 1.65V (mid-range)
-    if (voltage > 1.65f)
-    {
-      HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);
-    }
-    else
-    {
-      HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_RESET);
-    }
-
-    // Visual indication of high voltage using red LED (PD14)
-    // Turn on red LED if voltage is above 2.5V
-    if (voltage > 2.5f)
-    {
-      HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
-    }
-    else
-    {
-      HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
-    }
-
-    // Delay before next reading
-    HAL_Delay(100);
+      HAL_Delay(500);
   }
   /* USER CODE END 3 */
 }
@@ -260,7 +216,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_3;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
